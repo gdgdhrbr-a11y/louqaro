@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -62,6 +63,7 @@ class Player {
   final String name, role;
   bool dead = false;
   Player(this.name, this.role);
+  String get code => 'WW|$name|$role';
 }
 
 // ---------- الراوي: الإعداد ----------
@@ -147,9 +149,17 @@ class _BoardState extends State<Board> {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               Text(p.name, style: const TextStyle(fontSize: 24, color: red)),
               const SizedBox(height: 12),
-              QrImageView(data: 'WW|${p.name}|${p.role}', size: 240, backgroundColor: Colors.white),
+              QrImageView(data: p.code, size: 240, backgroundColor: Colors.white),
               const SizedBox(height: 8),
               const Text('يمسحه اللاعب صاحب الاسم فقط'),
+              TextButton(
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: p.code));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('تم نسخ الكود، أرسله للاعب سرّاً')));
+                },
+                child: const Text('نسخ الكود'),
+              ),
             ]),
           ),
         ),
@@ -184,19 +194,61 @@ class Scan extends StatefulWidget {
 
 class _ScanState extends State<Scan> {
   bool done = false;
+  final ctl = TextEditingController();
+
+  bool open(String v) {
+    final parts = v.trim().split('|');
+    if (done || parts.length != 3 || parts[0] != 'WW' || !roles.containsKey(parts[2])) return false;
+    done = true;
+    Navigator.pushReplacement(
+        context, MaterialPageRoute(builder: (_) => CardPage(parts[1], parts[2])));
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('امسح رمز بطاقتك')),
-        body: MobileScanner(onDetect: (cap) {
-          final v = cap.barcodes.isEmpty ? null : cap.barcodes.first.rawValue;
-          if (done || v == null) return;
-          final parts = v.split('|');
-          if (parts.length == 3 && parts[0] == 'WW' && roles.containsKey(parts[2])) {
-            done = true;
-            Navigator.pushReplacement(
-                context, MaterialPageRoute(builder: (_) => CardPage(parts[1], parts[2])));
-          }
-        }),
+        body: Column(children: [
+          Expanded(
+            child: MobileScanner(
+              errorBuilder: (c, e, w) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'تعذر فتح الكاميرا\n${e.errorCode.name}\n${e.errorDetails?.message ?? ''}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: red, fontSize: 16),
+                  ),
+                ),
+              ),
+              onDetect: (cap) {
+                final v = cap.barcodes.isEmpty ? null : cap.barcodes.first.rawValue;
+                if (v != null) open(v);
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(children: [
+              Expanded(
+                child: TextField(
+                  controller: ctl,
+                  decoration: const InputDecoration(labelText: 'أو الصق الكود هنا'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: () {
+                  if (!open(ctl.text)) {
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(const SnackBar(content: Text('الكود غير صحيح')));
+                  }
+                },
+                child: const Text('افتح'),
+              ),
+            ]),
+          ),
+        ]),
       );
 }
 
