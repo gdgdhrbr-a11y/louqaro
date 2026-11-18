@@ -18,14 +18,35 @@ jobs:
         with:
           channel: stable
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Generate Android project
         run: flutter create --platforms=android --project-name louqaro .
 
-      - name: Add camera permission
+      - name: Camera permission and app name
         run: |
           sed -i 's|<application|<uses-permission android:name="android.permission.CAMERA"/>\n    <application|' android/app/src/main/AndroidManifest.xml
+          sed -i 's|android:label="louqaro"|android:label="لوقارو"|' android/app/src/main/AndroidManifest.xml
+
+      - name: Download Arabic font
+        run: |
+          mkdir -p assets/fonts
+          if curl -fL -o assets/fonts/Lalezar-Regular.ttf https://github.com/google/fonts/raw/main/ofl/lalezar/Lalezar-Regular.ttf; then
+            printf '  fonts:\n    - family: Lalezar\n      fonts:\n        - asset: assets/fonts/Lalezar-Regular.ttf\n' >> pubspec.yaml
+          else
+            echo "font download failed, using default font"
+          fi
+
+      - name: Make wolf icon
+        run: |
+          pip install pillow
+          python make_icon.py
 
       - run: flutter pub get
+
+      - run: dart run flutter_launcher_icons
 
       - run: flutter build apk --release
 
